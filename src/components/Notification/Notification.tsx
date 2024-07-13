@@ -1,22 +1,42 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import classNames from 'classnames';
+import { Props } from '../../types/Props';
+import { Errors } from '../../types/Errors';
 
-interface NotificationProps {
-  errorMessage: string;
-  setErrorMessage: (errorMessage: string) => void;
-}
+export const Notification: React.FC<Props> = ({ appState, updateState }) => {
+  const errorMessageTimeout = useRef<number | null>(null);
 
-export const Notification: React.FC<NotificationProps> = ({
-  errorMessage,
-  setErrorMessage,
-}) => {
+  if (appState.error) {
+    if (errorMessageTimeout.current) {
+      clearTimeout(errorMessageTimeout.current);
+    }
+
+    errorMessageTimeout.current = window.setTimeout(() => {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          error: Errors.noError,
+        };
+      });
+    }, 3000);
+  }
+
+  const handleClearError = () => {
+    updateState(currentState => {
+      return {
+        ...currentState,
+        error: Errors.noError,
+      };
+    });
+  };
+
   return (
     <div
       data-cy="ErrorNotification"
       className={classNames(
         'notification is-danger is-light has-text-weight-normal',
         {
-          hidden: !errorMessage,
+          hidden: !appState.error,
         },
       )}
     >
@@ -24,9 +44,9 @@ export const Notification: React.FC<NotificationProps> = ({
         data-cy="HideErrorButton"
         type="button"
         className="delete"
-        onClick={() => setErrorMessage('')}
+        onClick={handleClearError}
       />
-      {errorMessage}
+      {appState.error}
     </div>
   );
 };

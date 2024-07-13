@@ -1,24 +1,81 @@
 import React from 'react';
 import classNames from 'classnames';
 import { Filter } from '../../types/Filter';
-import { Todo } from '../../types/Todo';
+import { Errors } from '../../types/Errors';
+import { deleteTodo } from '../../api/todos';
+import { Props } from '../../types/Props';
 
-interface FooterProps {
-  todos: Todo[];
-  filterBy: string;
-  setFilterBy: (filterBy: Filter) => void;
-  handleClearCompleted: () => void;
-}
+export const Footer: React.FC<Props> = ({ appState, updateState }) => {
+  const handleClearCompleted = async () => {
+    const completedTodos = appState.todos.filter(todo => todo.completed);
 
-export const Footer: React.FC<FooterProps> = ({
-  todos,
-  filterBy,
-  setFilterBy,
-  handleClearCompleted,
-}) => {
-  const todosCounter = todos.filter(todo => !todo.completed).length;
+    updateState(currentState => {
+      return {
+        ...currentState,
+        loadingTodos: [
+          ...currentState.loadingTodos,
+          ...completedTodos.map(todo => todo.id),
+        ],
+      };
+    });
 
-  const hasAnyCompletedTodos = todos.some(todo => todo.completed);
+    const promises = completedTodos.map(todo => {
+      return deleteTodo(todo.id).then(() => todo);
+    });
+    const deleteResults = await Promise.allSettled(promises);
+
+    const deletedTodos = deleteResults.reduce((acc: number[], result) => {
+      if (result.status === 'rejected') {
+        updateState(currentState => {
+          return {
+            ...currentState,
+            error: Errors.todoDelete,
+          };
+        });
+
+        return acc;
+      }
+
+      acc.push(result.value.id);
+
+      return acc;
+    }, []);
+
+    if (deletedTodos.length) {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          todos: currentState.todos.filter(
+            todo => !deletedTodos.includes(todo.id),
+          ),
+        };
+      });
+    }
+
+    updateState(currentState => {
+      return {
+        ...currentState,
+        loadingTodos: [
+          ...currentState.loadingTodos.filter(
+            id => !completedTodos.map(todo => todo.id).includes(id),
+          ),
+        ],
+      };
+    });
+  };
+
+  const handleFilterBy = (filter: Filter) => {
+    updateState(currentState => {
+      return {
+        ...currentState,
+        filter: filter,
+      };
+    });
+  };
+
+  const filterBy = appState.filter;
+  const todosCounter = appState.todos.filter(todo => !todo.completed).length;
+  const hasAnyCompletedTodos = appState.todos.some(todo => todo.completed);
 
   return (
     <footer className="todoapp__footer" data-cy="Footer">
@@ -33,7 +90,7 @@ export const Footer: React.FC<FooterProps> = ({
             selected: filterBy === Filter.all,
           })}
           data-cy="FilterLinkAll"
-          onClick={() => setFilterBy(Filter.all)}
+          onClick={() => handleFilterBy(Filter.all)}
         >
           All
         </a>
@@ -44,7 +101,7 @@ export const Footer: React.FC<FooterProps> = ({
             selected: filterBy === Filter.active,
           })}
           data-cy="FilterLinkActive"
-          onClick={() => setFilterBy(Filter.active)}
+          onClick={() => handleFilterBy(Filter.active)}
         >
           Active
         </a>
@@ -55,7 +112,7 @@ export const Footer: React.FC<FooterProps> = ({
             selected: filterBy === Filter.completed,
           })}
           data-cy="FilterLinkCompleted"
-          onClick={() => setFilterBy(Filter.completed)}
+          onClick={() => handleFilterBy(Filter.completed)}
         >
           Completed
         </a>

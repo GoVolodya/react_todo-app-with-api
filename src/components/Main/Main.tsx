@@ -1,27 +1,43 @@
-import React from 'react';
-import { TodoItem } from '../TodoItem/TodoItem';
+import React, { useState } from 'react';
+import { Errors } from '../../types/Errors';
 import { Filter } from '../../types/Filter';
 import { Todo } from '../../types/Todo';
+import { Props } from '../../types/Props';
+import { TodoItem } from '../TodoItem/TodoItem';
+import { deleteTodo, getTodos, updateTodo } from '../../api/todos';
 
-interface MainProps {
-  todos: Todo[];
-  filterBy: string;
-  tempTodo: Todo | null;
-  handleTodoDelete: (todoId: number) => void;
-  handleTodoUpdate: (data: Todo) => void;
-  todosWithLoader: number[];
-}
+export const Main: React.FC<Props> = ({ appState, updateState }) => {
+  const [initiated, setInitiated] = useState(false);
 
-export const Main: React.FC<MainProps> = ({
-  todos,
-  filterBy,
-  tempTodo,
-  handleTodoDelete,
-  handleTodoUpdate,
-  todosWithLoader,
-}) => {
-  const visibleTodos = todos.filter(todo => {
-    switch (filterBy) {
+  if (!initiated) {
+    const loadTodos = async () => {
+      try {
+        const todosFromServer = await getTodos().then(
+          loadedTodos => loadedTodos,
+        );
+
+        setInitiated(true);
+        updateState(currentState => {
+          return {
+            ...currentState,
+            todos: todosFromServer,
+          };
+        });
+      } catch (error) {
+        updateState(currentState => {
+          return {
+            ...currentState,
+            error: Errors.todosLoad,
+          };
+        });
+      }
+    };
+
+    loadTodos();
+  }
+
+  const visibleTodos = appState.todos.filter(todo => {
+    switch (appState.filter) {
       case Filter.active:
         return !todo.completed;
       case Filter.completed:
@@ -31,6 +47,96 @@ export const Main: React.FC<MainProps> = ({
     }
   });
 
+  const handleTodoDelete = async (todoId: number) => {
+    if (appState.loadingTodos.includes(todoId)) {
+      return;
+    }
+
+    const todoToDelete = appState.todos.find(todo => todo.id === todoId);
+
+    if (!todoToDelete) {
+      return;
+    }
+
+    updateState(currentState => {
+      return {
+        ...currentState,
+        loadingTodos: [...currentState.loadingTodos, todoId],
+      };
+    });
+
+    try {
+      await deleteTodo(todoToDelete.id).then(response => response);
+
+      updateState(currentState => {
+        return {
+          ...currentState,
+          todos: [
+            ...currentState.todos.filter(todo => todo.id !== todoToDelete.id),
+          ],
+        };
+      });
+    } catch (error) {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          error: Errors.todoDelete,
+        };
+      });
+    } finally {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          loadingTodos: [
+            ...currentState.loadingTodos.filter(id => id !== todoId),
+          ],
+        };
+      });
+    }
+  };
+
+  const handleTodoUpdate = async (todo: Todo, isEdited: boolean) => {
+    updateState(currentState => {
+      return {
+        ...currentState,
+        loadingTodos: [...currentState.loadingTodos, todo.id],
+        isEdited: isEdited,
+      };
+    });
+
+    try {
+      const updated = await updateTodo({ ...todo }).then(response => response);
+      const updatedTodos = appState.todos.map(item => {
+        if (item.id === todo.id) {
+          return { ...item, ...updated };
+        }
+
+        return item;
+      });
+
+      updateState(currentState => {
+        return {
+          ...currentState,
+          todos: updatedTodos,
+        };
+      });
+    } catch (error) {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          error: Errors.todoUpdate,
+        };
+      });
+    } finally {
+      updateState(currentState => {
+        return {
+          ...currentState,
+          loadingTodos: currentState.loadingTodos.filter(id => id !== todo.id),
+        };
+      });
+    }
+  };
+
   return (
     <section className="todoapp__main" data-cy="TodoList">
       {visibleTodos.map(todo => (
@@ -39,16 +145,16 @@ export const Main: React.FC<MainProps> = ({
           todo={todo}
           onDelete={handleTodoDelete}
           onUpdate={handleTodoUpdate}
-          withLoader={todosWithLoader.includes(todo.id)}
+          withLoader={appState.loadingTodos.includes(todo.id)}
         />
       ))}
 
-      {tempTodo && (
+      {appState.tempTodo && (
         <TodoItem
-          todo={tempTodo}
+          todo={appState.tempTodo}
           onDelete={handleTodoDelete}
           onUpdate={handleTodoUpdate}
-          withLoader={todosWithLoader.includes(tempTodo.id)}
+          withLoader={appState.loadingTodos.includes(appState.tempTodo.id)}
         />
       )}
     </section>

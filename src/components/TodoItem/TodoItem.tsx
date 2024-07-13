@@ -6,7 +6,7 @@ interface TodoItemProps {
   todo: Todo;
   withLoader: boolean;
   onDelete: (todoId: number) => void;
-  onUpdate: (data: Todo) => void;
+  onUpdate: (data: Todo, isEdited: boolean) => void;
 }
 
 export const TodoItem: React.FC<TodoItemProps> = ({
@@ -24,7 +24,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({
     if (!trimmedTitle) {
       onDelete(todo.id);
     } else {
-      onUpdate({ ...todo, title: trimmedTitle });
+      onUpdate({ ...todo, title: trimmedTitle }, isEdited);
     }
 
     setIsEdited(false);
@@ -38,14 +38,18 @@ export const TodoItem: React.FC<TodoItemProps> = ({
   };
 
   useEffect(() => {
-    if (todo.title !== updatedTitle.trim()) {
-      setIsEdited(true);
-    }
+    setIsEdited(todo.title !== updatedTitle.trim());
   }, [todo, updatedTitle, withLoader]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSubmit();
+  };
+
+  const handleBlur = () => {
+    if (isEdited) {
+      onSubmit();
+    }
   };
 
   return (
@@ -62,7 +66,9 @@ export const TodoItem: React.FC<TodoItemProps> = ({
           type="checkbox"
           className="todo__status"
           checked={todo.completed}
-          onChange={() => onUpdate({ ...todo, completed: !todo.completed })}
+          onChange={() =>
+            onUpdate({ ...todo, completed: !todo.completed }, isEdited)
+          }
           disabled={isEdited}
         />
       </label>
@@ -95,7 +101,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({
             placeholder="Empty todo will be deleted"
             value={updatedTitle}
             onChange={event => setUpdatedTitle(event.target.value)}
-            onBlur={onSubmit}
+            onBlur={handleBlur}
             onKeyUp={onEscape}
             autoFocus
           />
