@@ -8,5 +8,4 @@ export type AppState = {
   filter: Filter;
   loadingTodos: number[];
   tempTodo: Todo | null;
-  isEdited: boolean;
 };

@@ -1,37 +1,39 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import classNames from 'classnames';
 import { Filter } from '../../types/Filter';
-import { Errors } from '../../types/Errors';
+import { DispatchContext, StateContext } from '../../context/StateContext';
 import { deleteTodo } from '../../api/todos';
-import { Props } from '../../types/Props';
+import { Errors } from '../../types/Errors';
 
-export const Footer: React.FC<Props> = ({ appState, updateState }) => {
+export const Footer: React.FC = () => {
+  const dispatch = useContext(DispatchContext);
+  const { filter, todos, error } = useContext(StateContext);
+
+  const handleFilterBy = (filterBy: Filter) => {
+    dispatch({
+      type: 'filterBy',
+      payload: filterBy,
+    });
+  };
+
   const handleClearCompleted = async () => {
-    const completedTodos = appState.todos.filter(todo => todo.completed);
+    const completedTodos = todos.filter(todo => todo.completed);
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [
-          ...currentState.loadingTodos,
-          ...completedTodos.map(todo => todo.id),
-        ],
-      };
+    dispatch({
+      type: 'loadingTodos',
+      payload: completedTodos.map(todo => todo.id),
     });
 
     const promises = completedTodos.map(todo => {
       return deleteTodo(todo.id).then(() => todo);
     });
+
     const deleteResults = await Promise.allSettled(promises);
+    let withError = false;
 
     const deletedTodos = deleteResults.reduce((acc: number[], result) => {
       if (result.status === 'rejected') {
-        updateState(currentState => {
-          return {
-            ...currentState,
-            error: Errors.todoDelete,
-          };
-        });
+        withError = true;
 
         return acc;
       }
@@ -41,41 +43,24 @@ export const Footer: React.FC<Props> = ({ appState, updateState }) => {
       return acc;
     }, []);
 
-    if (deletedTodos.length) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          todos: currentState.todos.filter(
-            todo => !deletedTodos.includes(todo.id),
-          ),
-        };
-      });
-    }
+    dispatch({
+      type: 'error',
+      payload: withError ? Errors.todoDelete : error,
+    });
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [
-          ...currentState.loadingTodos.filter(
-            id => !completedTodos.map(todo => todo.id).includes(id),
-          ),
-        ],
-      };
+    dispatch({
+      type: 'setTodos',
+      payload: todos.filter(todo => !deletedTodos.includes(todo.id)),
+    });
+
+    dispatch({
+      type: 'loadingTodos',
+      payload: [],
     });
   };
 
-  const handleFilterBy = (filter: Filter) => {
-    updateState(currentState => {
-      return {
-        ...currentState,
-        filter: filter,
-      };
-    });
-  };
-
-  const filterBy = appState.filter;
-  const todosCounter = appState.todos.filter(todo => !todo.completed).length;
-  const hasAnyCompletedTodos = appState.todos.some(todo => todo.completed);
+  const todosCounter = todos.filter(todo => !todo.completed).length;
+  const hasAnyCompletedTodos = todos.some(todo => todo.completed);
 
   return (
     <footer className="todoapp__footer" data-cy="Footer">
@@ -87,7 +72,7 @@ export const Footer: React.FC<Props> = ({ appState, updateState }) => {
         <a
           href="#/"
           className={classNames('filter__link', {
-            selected: filterBy === Filter.all,
+            selected: filter === Filter.all,
           })}
           data-cy="FilterLinkAll"
           onClick={() => handleFilterBy(Filter.all)}
@@ -98,7 +83,7 @@ export const Footer: React.FC<Props> = ({ appState, updateState }) => {
         <a
           href="#/active"
           className={classNames('filter__link', {
-            selected: filterBy === Filter.active,
+            selected: filter === Filter.active,
           })}
           data-cy="FilterLinkActive"
           onClick={() => handleFilterBy(Filter.active)}
@@ -109,7 +94,7 @@ export const Footer: React.FC<Props> = ({ appState, updateState }) => {
         <a
           href="#/completed"
           className={classNames('filter__link', {
-            selected: filterBy === Filter.completed,
+            selected: filter === Filter.completed,
           })}
           data-cy="FilterLinkCompleted"
           onClick={() => handleFilterBy(Filter.completed)}

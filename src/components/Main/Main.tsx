@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { Errors } from '../../types/Errors';
 import { Filter } from '../../types/Filter';
 import { Todo } from '../../types/Todo';
-import { Props } from '../../types/Props';
 import { TodoItem } from '../TodoItem/TodoItem';
 import { deleteTodo, getTodos, updateTodo } from '../../api/todos';
+import { DispatchContext, StateContext } from '../../context/StateContext';
 
-export const Main: React.FC<Props> = ({ appState, updateState }) => {
+export const Main: React.FC = () => {
+  const dispatch = useContext(DispatchContext);
+  const { todos, loadingTodos, filter, tempTodo } = useContext(StateContext);
+
   const [initiated, setInitiated] = useState(false);
 
   if (!initiated) {
@@ -17,18 +20,14 @@ export const Main: React.FC<Props> = ({ appState, updateState }) => {
         );
 
         setInitiated(true);
-        updateState(currentState => {
-          return {
-            ...currentState,
-            todos: todosFromServer,
-          };
+        dispatch({
+          type: 'setTodos',
+          payload: todosFromServer,
         });
       } catch (error) {
-        updateState(currentState => {
-          return {
-            ...currentState,
-            error: Errors.todosLoad,
-          };
+        dispatch({
+          type: 'error',
+          payload: Errors.todosLoad,
         });
       }
     };
@@ -36,8 +35,8 @@ export const Main: React.FC<Props> = ({ appState, updateState }) => {
     loadTodos();
   }
 
-  const visibleTodos = appState.todos.filter(todo => {
-    switch (appState.filter) {
+  const visibleTodos = todos.filter(todo => {
+    switch (filter) {
       case Filter.active:
         return !todo.completed;
       case Filter.completed:
@@ -48,65 +47,50 @@ export const Main: React.FC<Props> = ({ appState, updateState }) => {
   });
 
   const handleTodoDelete = async (todoId: number) => {
-    if (appState.loadingTodos.includes(todoId)) {
+    if (loadingTodos.includes(todoId)) {
       return;
     }
 
-    const todoToDelete = appState.todos.find(todo => todo.id === todoId);
+    const todoToDelete = todos.find(todo => todo.id === todoId);
 
     if (!todoToDelete) {
       return;
     }
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [...currentState.loadingTodos, todoId],
-      };
+    dispatch({
+      type: 'loadingTodos',
+      payload: [...loadingTodos, todoId],
     });
 
     try {
       await deleteTodo(todoToDelete.id).then(response => response);
 
-      updateState(currentState => {
-        return {
-          ...currentState,
-          todos: [
-            ...currentState.todos.filter(todo => todo.id !== todoToDelete.id),
-          ],
-        };
+      dispatch({
+        type: 'setTodos',
+        payload: todos.filter(todo => todo.id !== todoToDelete.id),
       });
     } catch (error) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          error: Errors.todoDelete,
-        };
+      dispatch({
+        type: 'error',
+        payload: Errors.todoDelete,
       });
     } finally {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          loadingTodos: [
-            ...currentState.loadingTodos.filter(id => id !== todoId),
-          ],
-        };
+      dispatch({
+        type: 'loadingTodos',
+        payload: loadingTodos.filter(id => id !== todoId),
       });
     }
   };
 
-  const handleTodoUpdate = async (todo: Todo, isEdited: boolean) => {
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [...currentState.loadingTodos, todo.id],
-        isEdited: isEdited,
-      };
+  const handleTodoUpdate = async (todo: Todo) => {
+    dispatch({
+      type: 'loadingTodos',
+      payload: [...loadingTodos, todo.id],
     });
 
     try {
       const updated = await updateTodo({ ...todo }).then(response => response);
-      const updatedTodos = appState.todos.map(item => {
+      const updatedTodos = todos.map(item => {
         if (item.id === todo.id) {
           return { ...item, ...updated };
         }
@@ -114,25 +98,19 @@ export const Main: React.FC<Props> = ({ appState, updateState }) => {
         return item;
       });
 
-      updateState(currentState => {
-        return {
-          ...currentState,
-          todos: updatedTodos,
-        };
+      dispatch({
+        type: 'setTodos',
+        payload: updatedTodos,
       });
     } catch (error) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          error: Errors.todoUpdate,
-        };
+      dispatch({
+        type: 'error',
+        payload: Errors.todoUpdate,
       });
     } finally {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          loadingTodos: currentState.loadingTodos.filter(id => id !== todo.id),
-        };
+      dispatch({
+        type: 'loadingTodos',
+        payload: loadingTodos.filter(id => id !== todo.id),
       });
     }
   };
@@ -145,16 +123,16 @@ export const Main: React.FC<Props> = ({ appState, updateState }) => {
           todo={todo}
           onDelete={handleTodoDelete}
           onUpdate={handleTodoUpdate}
-          withLoader={appState.loadingTodos.includes(todo.id)}
+          withLoader={loadingTodos.includes(todo.id)}
         />
       ))}
 
-      {appState.tempTodo && (
+      {tempTodo && (
         <TodoItem
-          todo={appState.tempTodo}
+          todo={tempTodo}
           onDelete={handleTodoDelete}
           onUpdate={handleTodoUpdate}
-          withLoader={appState.loadingTodos.includes(appState.tempTodo.id)}
+          withLoader={loadingTodos.includes(tempTodo.id)}
         />
       )}
     </section>

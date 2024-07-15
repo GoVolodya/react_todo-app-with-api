@@ -6,7 +6,7 @@ interface TodoItemProps {
   todo: Todo;
   withLoader: boolean;
   onDelete: (todoId: number) => void;
-  onUpdate: (data: Todo, isEdited: boolean) => void;
+  onUpdate: (data: Todo) => void;
 }
 
 export const TodoItem: React.FC<TodoItemProps> = ({
@@ -15,16 +15,17 @@ export const TodoItem: React.FC<TodoItemProps> = ({
   onDelete,
   onUpdate,
 }) => {
+  const { title, id, completed } = todo;
   const [isEdited, setIsEdited] = useState(false);
-  const [updatedTitle, setUpdatedTitle] = useState(todo.title);
+  const [updatedTitle, setUpdatedTitle] = useState(title);
 
   const onSubmit = () => {
     const trimmedTitle = updatedTitle.trim();
 
     if (!trimmedTitle) {
-      onDelete(todo.id);
+      onDelete(id);
     } else {
-      onUpdate({ ...todo, title: trimmedTitle }, isEdited);
+      onUpdate({ ...todo, title: trimmedTitle });
     }
 
     setIsEdited(false);
@@ -32,14 +33,14 @@ export const TodoItem: React.FC<TodoItemProps> = ({
 
   const onEscape = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
-      setUpdatedTitle(todo.title);
+      setUpdatedTitle(title);
       setIsEdited(false);
     }
   };
 
   useEffect(() => {
-    setIsEdited(todo.title !== updatedTitle.trim());
-  }, [todo, updatedTitle, withLoader]);
+    setIsEdited(title !== updatedTitle.trim());
+  }, [title, updatedTitle, withLoader]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -56,7 +57,7 @@ export const TodoItem: React.FC<TodoItemProps> = ({
     <div
       data-cy="Todo"
       className={classNames('todo', {
-        completed: todo.completed,
+        completed: completed,
       })}
     >
       {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
@@ -65,10 +66,8 @@ export const TodoItem: React.FC<TodoItemProps> = ({
           data-cy="TodoStatus"
           type="checkbox"
           className="todo__status"
-          checked={todo.completed}
-          onChange={() =>
-            onUpdate({ ...todo, completed: !todo.completed }, isEdited)
-          }
+          checked={completed}
+          onChange={() => onUpdate({ ...todo, completed: !completed })}
           disabled={isEdited}
         />
       </label>
@@ -80,14 +79,14 @@ export const TodoItem: React.FC<TodoItemProps> = ({
             className="todo__title"
             onDoubleClick={() => setIsEdited(true)}
           >
-            {todo.title}
+            {title}
           </span>
 
           <button
             type="button"
             className="todo__remove"
             data-cy="TodoDelete"
-            onClick={() => onDelete(todo.id)}
+            onClick={() => onDelete(id)}
           >
             ×
           </button>

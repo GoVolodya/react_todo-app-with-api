@@ -1,32 +1,30 @@
-import React, { useRef } from 'react';
+import React, { useContext, useRef } from 'react';
 import classNames from 'classnames';
-import { Props } from '../../types/Props';
 import { Errors } from '../../types/Errors';
+import { DispatchContext, StateContext } from '../../context/StateContext';
 
-export const Notification: React.FC<Props> = ({ appState, updateState }) => {
+export const Notification: React.FC = () => {
   const errorMessageTimeout = useRef<number | null>(null);
+  const { error } = useContext(StateContext);
+  const dispatch = useContext(DispatchContext);
 
-  if (appState.error) {
+  if (error) {
     if (errorMessageTimeout.current) {
       clearTimeout(errorMessageTimeout.current);
     }
 
     errorMessageTimeout.current = window.setTimeout(() => {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          error: Errors.noError,
-        };
+      dispatch({
+        type: 'error',
+        payload: Errors.noError,
       });
     }, 3000);
   }
 
   const handleClearError = () => {
-    updateState(currentState => {
-      return {
-        ...currentState,
-        error: Errors.noError,
-      };
+    dispatch({
+      type: 'error',
+      payload: Errors.noError,
     });
   };
 
@@ -36,7 +34,7 @@ export const Notification: React.FC<Props> = ({ appState, updateState }) => {
       className={classNames(
         'notification is-danger is-light has-text-weight-normal',
         {
-          hidden: !appState.error,
+          hidden: !error,
         },
       )}
     >
@@ -46,7 +44,7 @@ export const Notification: React.FC<Props> = ({ appState, updateState }) => {
         className="delete"
         onClick={handleClearError}
       />
-      {appState.error}
+      {error}
     </div>
   );
 };

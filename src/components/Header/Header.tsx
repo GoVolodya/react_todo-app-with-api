@@ -1,17 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import classNames from 'classnames';
-import { Props } from '../../types/Props';
 import { Errors } from '../../types/Errors';
 import { addTodo, updateTodo, USER_ID } from '../../api/todos';
+import { DispatchContext, StateContext } from '../../context/StateContext';
 
-export const Header: React.FC<Props> = ({ appState, updateState }) => {
+export const Header: React.FC = () => {
+  const { todos, loadingTodos, error } = useContext(StateContext);
+  const dispatch = useContext(DispatchContext);
+
   const [newTodoTitle, setNewTodoTitle] = useState('');
   const [disableInput, setDisableInput] = useState(false);
 
   const newTodoInput = useRef<HTMLInputElement>(null);
 
-  const activeToggleAll =
-    appState.todos.every(todo => todo.completed) && !!appState.todos.length;
+  const activeToggleAll = todos.every(todo => todo.completed) && !!todos.length;
 
   const focusNewTodoInput = () => {
     if (newTodoInput.current) {
@@ -31,11 +33,9 @@ export const Header: React.FC<Props> = ({ appState, updateState }) => {
     const newTitle = newTodoTitle.trim();
 
     if (!newTitle) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          error: Errors.emptyTitle,
-        };
+      dispatch({
+        type: 'error',
+        payload: Errors.emptyTitle,
       });
 
       return;
@@ -49,61 +49,53 @@ export const Header: React.FC<Props> = ({ appState, updateState }) => {
       completed: false,
     };
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        tempTodo: { ...newTodo, id: 0 },
-        loadingTodos: [...currentState.loadingTodos, 0],
-      };
+    dispatch({
+      type: 'addTempTodo',
+      payload: { ...newTodo, id: 0 },
+    });
+    dispatch({
+      type: 'loadingTodos',
+      payload: [0],
     });
 
     try {
       const createdTodo = await addTodo(newTodo).then(response => response);
 
-      updateState(currentState => {
-        return {
-          ...currentState,
-          todos: [...currentState.todos, createdTodo],
-        };
+      dispatch({
+        type: 'addTodo',
+        payload: createdTodo,
       });
 
       setNewTodoTitle('');
-    } catch (error) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          error: Errors.todoCreate,
-        };
+    } catch (err) {
+      dispatch({
+        type: 'error',
+        payload: Errors.todoCreate,
       });
     } finally {
       setDisableInput(false);
-      updateState(currentState => {
-        return {
-          ...currentState,
-          tempTodo: null,
-          loadingTodos: currentState.loadingTodos.filter(id => id !== 0),
-        };
+      dispatch({
+        type: 'addTempTodo',
+        payload: null,
       });
-      focusNewTodoInput();
+      dispatch({
+        type: 'loadingTodos',
+        payload: [0],
+      });
     }
   };
 
   const handleToggleAll = async () => {
-    const statusShouldBe = appState.todos.some(todo => !todo.completed);
-    const todosToUpdate = appState.todos
+    const statusShouldBe = todos.some(todo => !todo.completed);
+    const todosToUpdate = todos
       .filter(todo => todo.completed !== statusShouldBe)
       .map(todo => {
         return { ...todo, completed: statusShouldBe };
       });
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [
-          ...currentState.loadingTodos,
-          ...todosToUpdate.map(todo => todo.id),
-        ],
-      };
+    dispatch({
+      type: 'loadingTodos',
+      payload: todosToUpdate.map(todo => todo.id),
     });
 
     const promises = todosToUpdate.map(todo => {
@@ -112,15 +104,11 @@ export const Header: React.FC<Props> = ({ appState, updateState }) => {
       );
     });
     const updatedResults = await Promise.allSettled(promises);
+    let withError = false;
 
     const updatedTodos = updatedResults.reduce((acc: number[], result) => {
       if (result.status === 'rejected') {
-        updateState(currentState => {
-          return {
-            ...currentState,
-            error: Errors.todoUpdate,
-          };
-        });
+        withError = true;
 
         return acc;
       }
@@ -130,42 +118,38 @@ export const Header: React.FC<Props> = ({ appState, updateState }) => {
       return acc;
     }, []);
 
-    if (!!updatedTodos.length) {
-      updateState(currentState => {
-        return {
-          ...currentState,
-          todos: currentState.todos.map(todo => {
-            if (updatedTodos.includes(todo.id)) {
-              return { ...todo, completed: statusShouldBe };
-            }
-
-            return todo;
-          }),
-        };
+    if (withError) {
+      dispatch({
+        type: 'error',
+        payload: Errors.todoUpdate,
       });
     }
 
-    updateState(currentState => {
-      return {
-        ...currentState,
-        loadingTodos: [
-          ...currentState.loadingTodos.filter(
-            id => !todosToUpdate.map(todo => todo.id).includes(id),
-          ),
-        ],
-      };
+    dispatch({
+      type: 'setTodos',
+      payload: todos.map(todo => {
+        if (updatedTodos.includes(todo.id)) {
+          return { ...todo, completed: statusShouldBe };
+        }
+
+        return todo;
+      }),
+    });
+    dispatch({
+      type: 'loadingTodos',
+      payload: loadingTodos.filter(
+        id => !todosToUpdate.map(todo => todo.id).includes(id),
+      ),
     });
   };
 
   useEffect(() => {
-    if (!appState.isEdited) {
-      focusNewTodoInput();
-    }
-  }, [appState]);
+    focusNewTodoInput();
+  }, [todos, error]);
 
   return (
     <header className="todoapp__header">
-      {!!appState.todos.length && (
+      {!!todos.length && (
         <button
           type="button"
           className={classNames('todoapp__toggle-all', {
@@ -186,7 +170,6 @@ export const Header: React.FC<Props> = ({ appState, updateState }) => {
           value={newTodoTitle}
           onChange={event => setNewTodoTitle(event.target.value)}
           disabled={disableInput}
-          autoFocus
         />
       </form>
     </header>
